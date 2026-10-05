@@ -106,8 +106,33 @@ fontformat: woff2
 font_cache_buster: custom-font-1
 ```
 
+### Clock Face
+
+* **clock_face.background_colour**: Face background colour. Uses the Home Assistant theme when omitted.
+* **clock_face.border_colour**: Outer circle colour.
+* **clock_face.border_width**: Outer circle thickness in pixels. Set to `0` to hide it.
+* **clock_face.image**: Custom square face image URL, or a filename in `/local/community/weasley-card/`. Clipped to the clock circle beneath labels and hands.
+* **clock_face.image_scale**: Scales the image from the centre, clipping any overflow. Defaults to `1`; `1.2` is 20% larger.
+* **clock_face.image_offset_x** / **image_offset_y**: Moves the image in pixels; positive values move right / down.
+
+```yaml
+clock_face:
+  background_colour: "#242424"
+  border_colour: "#b89d59"
+  border_width: 3
+  image: /local/community/weasley-card/clock-face.png
+  image_scale: 1
+  image_offset_x: 0
+  image_offset_y: 0
+location_text:
+  colour: "#f4e6b5"
+hand_text:
+  colour: "#ffffff"
+```
+
 ### Clock Text
 
+* **location_text.colour**: Colour of all location names. Uses the theme when omitted.
 * **location_text.text_to_edge**: Moves location labels outward or inward.
 * **location_text.font_size_max**: Normal location label size.
 * **location_text.font_size_min**: Smallest size used when labels need to fit.
@@ -124,6 +149,7 @@ font_cache_buster: custom-font-1
 * **hand_text.offset**: Moves wizard names along the hand.
 * **hand_text.x_offset**: Moves wizard names across the hand.
 * **hand_text.font_scale**: Adjusts wizard name size.
+* **hand_text.colour**: Default colour for wizard names. Each wizard can override it with `textcolour` or its own `hand_text.colour`, including test wizards.
 
 ### Effects
 
@@ -133,6 +159,7 @@ font_cache_buster: custom-font-1
 * **location_filter**: Lets a populated location label be clicked to highlight its hands.
 * **recent_movement**: Adds a temporary glow after a hand changes location.
 * **avatars**: Adds initials, entity pictures, or local images to hand tips. GIF files animate automatically.
+* **avatars.shadow**: Optional global avatar image shadow. Defaults off; use `true` or set `enabled`, `blur`, `x`, `y`, `spread`, and `colour`.
 
 ### Testing
 

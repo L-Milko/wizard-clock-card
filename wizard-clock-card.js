@@ -1,5 +1,5 @@
 const CARDNAME = "wizard-clock-card";
-const VERSION = "0.12.5-fontface-path-debug";
+const VERSION = "0.12.11-clock-face";
 
 const debugLogging = false;
 const DEFAULT_LOST_STATE = "Lost";
@@ -188,6 +188,11 @@ class WizardClockCard extends HTMLElement {
 
     this.selectedFont = this.config.fontName || this.config.fontname || this.config.font_name || DEFAULT_FONT_NAME;
     this.fontFallbackName = this.config.fontFallbackName || this.config.fontfallbackname || this.config.font_fallback_name;
+    this.configureClockFace();
+    const locationTextConfig = this.config.location_text || {};
+    this.locationTextColour = locationTextConfig.colour || locationTextConfig.color;
+    const handTextConfig = this.config.hand_text || {};
+    this.handTextColour = handTextConfig.colour || handTextConfig.color;
     this.fontScale = this.getConfigNumber(this.config, ["font_scale", "fontScale"], 1.1);
     this.locationTextOffset = this.getConfigNumber(
       this.config.location_text,
@@ -493,6 +498,18 @@ class WizardClockCard extends HTMLElement {
     this.avatarRingColour = this.avatarConfig.ring_colour || this.avatarConfig.ringColor || this.avatarConfig.ring_color;
     this.avatarImageBasePath = this.avatarConfig.image_path || this.avatarConfig.imagePath || this.avatarConfig.base_path || this.avatarConfig.basePath || "/hacsfiles/weasley-card/";
     this.avatarImageUp = this.getConfigBoolean(this.avatarConfig, ["image_up", "imageUp", "always_up", "alwaysUp"], false);
+    const avatarShadowValue = this.avatarConfig.shadow;
+    this.avatarShadowConfig = avatarShadowValue && typeof avatarShadowValue === "object" ? avatarShadowValue : this.avatarConfig;
+    this.avatarShadowEnabled = typeof avatarShadowValue === "boolean" ?
+      avatarShadowValue :
+      this.getConfigBoolean(this.avatarShadowConfig, ["enabled", "image_shadow", "imageShadow", "shadow_enabled", "shadowEnabled"], false);
+    this.avatarShadowBlur = this.getConfigNumber(this.avatarShadowConfig, ["blur", "softness", "shadow_blur", "shadowBlur"], 10);
+    this.avatarShadowOffsetX = this.getConfigNumber(this.avatarShadowConfig, ["x", "offset_x", "offsetX", "shadow_x", "shadowX"], 0);
+    this.avatarShadowOffsetY = this.getConfigNumber(this.avatarShadowConfig, ["y", "offset_y", "offsetY", "shadow_y", "shadowY", "distance"], 3);
+    this.avatarShadowSpread = this.getConfigNumber(this.avatarShadowConfig, ["spread", "shadow_spread", "shadowSpread"], 0);
+    this.avatarShadowColour = this.avatarShadowConfig.colour || this.avatarShadowConfig.color ||
+      this.avatarShadowConfig.shadow_colour || this.avatarShadowConfig.shadowColor ||
+      this.avatarShadowConfig.shadow_color || "rgba(0, 0, 0, 0.35)";
 
     if (!this.previousWizardLocations) {
       this.previousWizardLocations = {};
@@ -859,6 +876,11 @@ class WizardClockCard extends HTMLElement {
     return configuredText !== undefined && configuredText !== null ? String(configuredText) : wizard.name;
   }
 
+  getWizardHandTextColour(wizard) {
+    const handTextConfig = this.getWizardHandTextConfig(wizard);
+    return handTextConfig.colour || handTextConfig.color || wizard.textcolour || wizard.textcolor || this.handTextColour;
+  }
+
   getWizardHandTextOffset(wizard) {
     return this.getConfigNumber(
       this.getWizardHandTextConfig(wizard),
@@ -1065,13 +1087,107 @@ class WizardClockCard extends HTMLElement {
     return this.avatarOverlayImages[key];
   }
 
-  updateAvatarOverlays() {
-    if (!this.avatarOverlayDiv && !this.avatarOverlayImages) {
+  getAvatarHandCoverCanvas(index) {
+    this.ensureAvatarOverlayContainer();
+    if (!this.avatarOverlayDiv) {
+      return undefined;
+    }
+
+    if (!this.avatarHandCoverCanvases) {
+      this.avatarHandCoverCanvases = [];
+    }
+
+    if (!this.avatarHandCoverCanvases[index]) {
+      const canvas = document.createElement('canvas');
+      canvas.style.position = 'absolute';
+      canvas.style.pointerEvents = 'none';
+      canvas.style.display = 'none';
+      this.avatarOverlayDiv.appendChild(canvas);
+      this.avatarHandCoverCanvases[index] = canvas;
+    }
+
+    return this.avatarHandCoverCanvases[index];
+  }
+
+  getAvatarHingeCoverCanvas() {
+    this.ensureAvatarOverlayContainer();
+    if (!this.avatarOverlayDiv) {
+      return undefined;
+    }
+
+    if (!this.avatarHingeCoverCanvas) {
+      const canvas = document.createElement('canvas');
+      canvas.style.position = 'absolute';
+      canvas.style.pointerEvents = 'none';
+      canvas.style.display = 'none';
+      this.avatarOverlayDiv.appendChild(canvas);
+      this.avatarHingeCoverCanvas = canvas;
+    }
+
+    return this.avatarHingeCoverCanvas;
+  }
+
+  syncOverlayCanvasBounds(canvas, canvasRect, divRect, zIndex) {
+    if (!canvas || !this.canvas) {
+      return undefined;
+    }
+
+    if (canvas.width !== this.canvas.width) {
+      canvas.width = this.canvas.width;
+    }
+    if (canvas.height !== this.canvas.height) {
+      canvas.height = this.canvas.height;
+    }
+    canvas.style.left = (canvasRect.left - divRect.left) + 'px';
+    canvas.style.top = (canvasRect.top - divRect.top) + 'px';
+    canvas.style.width = canvasRect.width + 'px';
+    canvas.style.height = canvasRect.height + 'px';
+    canvas.style.zIndex = String(zIndex);
+    canvas.style.display = 'block';
+    return canvas.getContext('2d');
+  }
+
+  getAvatarShadowCss(scale) {
+    if (!this.avatarShadowEnabled) {
+      return 'none';
+    }
+
+    const sizeScale = scale || 1;
+    return (this.avatarShadowOffsetX * sizeScale) + 'px ' +
+      (this.avatarShadowOffsetY * sizeScale) + 'px ' +
+      (this.avatarShadowBlur * sizeScale) + 'px ' +
+      (this.avatarShadowSpread * sizeScale) + 'px ' +
+      this.avatarShadowColour;
+  }
+
+  applyAvatarCanvasShadow(ctx) {
+    if (!ctx || !this.avatarShadowEnabled) {
+      this.clearCanvasShadow(ctx);
       return;
     }
 
+    ctx.shadowColor = this.avatarShadowColour;
+    ctx.shadowBlur = this.avatarShadowBlur;
+    ctx.shadowOffsetX = this.avatarShadowOffsetX;
+    ctx.shadowOffsetY = this.avatarShadowOffsetY;
+  }
+
+  clearCanvasShadow(ctx) {
+    if (!ctx) {
+      return;
+    }
+
+    ctx.shadowColor = "#0000";
+    ctx.shadowBlur = 0;
+    ctx.shadowOffsetX = 0;
+    ctx.shadowOffsetY = 0;
+  }
+
+  updateAvatarOverlays() {
     if (!this.canvas || !this.div || !this.currentstate || !this.canvas.getBoundingClientRect || !this.div.getBoundingClientRect) {
       this.hideAvatarOverlays({});
+      this.hideAvatarHandCovers();
+      this.hideAvatarHingeCover();
       return;
     }
 
@@ -1079,11 +1195,14 @@ class WizardClockCard extends HTMLElement {
     const divRect = this.div.getBoundingClientRect();
     if (!canvasRect.width || !canvasRect.height || !this.canvas.width) {
       this.hideAvatarOverlays({});
+      this.hideAvatarHandCovers();
+      this.hideAvatarHingeCover();
       return;
     }
 
     const activeOverlays = {};
     const scale = canvasRect.width / this.canvas.width;
+    var hasAnimatedAvatar = false;
     for (var num = 0; num < this.currentstate.length; num++) {
       const hand = this.currentstate[num];
       const options = this.getHandDrawOptions(hand);
@@ -1096,6 +1215,7 @@ class WizardClockCard extends HTMLElement {
         continue;
       }
 
+      hasAnimatedAvatar = true;
       const key = this.slugify(hand.wizardKey);
       activeOverlays[key] = true;
       const size = Math.max(hand.width * 1.4, this.avatarSize) * scale;
@@ -1115,12 +1235,61 @@ class WizardClockCard extends HTMLElement {
       overlay.style.width = size + 'px';
       overlay.style.height = size + 'px';
       overlay.style.border = ringWidth + 'px solid ' + ringColour;
+      overlay.style.boxShadow = this.getAvatarShadowCss(scale);
       overlay.style.opacity = options.alpha === undefined ? '1' : String(options.alpha);
       overlay.style.transform = 'translate(-50%, -50%) rotate(' + (hand.avatarImageUp ? 0 : hand.pos) + 'rad)';
-      overlay.style.zIndex = '2';
+      overlay.style.zIndex = String(100 + num * 2 + 1);
     }
 
     this.hideAvatarOverlays(activeOverlays);
+    this.updateAvatarHandCovers(hasAnimatedAvatar, canvasRect, divRect);
+    this.updateAvatarHingeCover(hasAnimatedAvatar, canvasRect, divRect);
+  }
+
+  updateAvatarHandCovers(hasAnimatedAvatar, canvasRect, divRect) {
+    if (!hasAnimatedAvatar || !this.currentstate || !this.currentstate.length) {
+      this.hideAvatarHandCovers();
+      return;
+    }
+
+    for (var num = 0; num < this.currentstate.length; num++) {
+      const coverCanvas = this.getAvatarHandCoverCanvas(num);
+      const coverCtx = this.syncOverlayCanvasBounds(coverCanvas, canvasRect, divRect, 100 + num * 2);
+      if (!coverCtx) {
+        continue;
+      }
+
+      const hand = this.currentstate[num];
+      coverCtx.clearRect(0, 0, coverCanvas.width, coverCanvas.height);
+      coverCtx.save();
+      coverCtx.translate(coverCanvas.width / 2, coverCanvas.height / 2);
+      const options = this.getHandDrawOptions(hand);
+      options.shadow = false;
+      this.drawHand(coverCtx, hand.pos, hand.length, hand.width, hand.wizard, hand.colour, hand.textcolour, options);
+      coverCtx.restore();
+    }
+
+    this.hideUnusedAvatarHandCovers(this.currentstate.length);
+  }
+
+  updateAvatarHingeCover(hasAnimatedAvatar, canvasRect, divRect) {
+    if (!hasAnimatedAvatar) {
+      this.hideAvatarHingeCover();
+      return;
+    }
+
+    const hingeCanvas = this.getAvatarHingeCoverCanvas();
+    const zIndex = 100 + (this.currentstate ? this.currentstate.length * 2 : 0) + 2;
+    const hingeCtx = this.syncOverlayCanvasBounds(hingeCanvas, canvasRect, divRect, zIndex);
+    if (!hingeCtx) {
+      return;
+    }
+
+    hingeCtx.clearRect(0, 0, hingeCanvas.width, hingeCanvas.height);
+    hingeCtx.save();
+    hingeCtx.translate(hingeCanvas.width / 2, hingeCanvas.height / 2);
+    this.drawHinge(hingeCtx, this.radius, this.shaft_colour);
+    hingeCtx.restore();
   }
 
   hideAvatarOverlays(activeOverlays) {
@@ -1131,6 +1300,28 @@ class WizardClockCard extends HTMLElement {
     for (const key in this.avatarOverlayImages) {
       if (!activeOverlays[key]) {
         this.avatarOverlayImages[key].style.display = 'none';
+      }
+    }
+  }
+
+  hideAvatarHandCovers() {
+    this.hideUnusedAvatarHandCovers(0);
+  }
+
+  hideAvatarHingeCover() {
+    if (this.avatarHingeCoverCanvas) {
+      this.avatarHingeCoverCanvas.style.display = 'none';
+    }
+  }
+
+  hideUnusedAvatarHandCovers(startIndex) {
+    if (!this.avatarHandCoverCanvases) {
+      return;
+    }
+
+    for (var num = startIndex; num < this.avatarHandCoverCanvases.length; num++) {
+      if (this.avatarHandCoverCanvases[num]) {
+        this.avatarHandCoverCanvases[num].style.display = 'none';
       }
     }
   }
@@ -1152,10 +1343,12 @@ class WizardClockCard extends HTMLElement {
     const ringColour = options.avatarRingColour || textcolour || this.getThemeColour('primaryText');
 
     ctx.save();
+    this.applyAvatarCanvasShadow(ctx);
     ctx.beginPath();
     ctx.arc(x, y, radius, 0, 2 * Math.PI);
     ctx.fillStyle = colour || this.getThemeColour('primary');
     ctx.fill();
+    this.clearCanvasShadow(ctx);
 
     ctx.save();
     if (options.avatarImageUp) {
@@ -1165,7 +1358,7 @@ class WizardClockCard extends HTMLElement {
     }
 
     if (useOverlay) {
-      // Animated GIFs are rendered by a positioned <img> overlay so the browser can play the loop normally.
+      // Animated GIFs stay as real <img> elements so mobile WebViews keep playing them.
     } else if (image && image.complete && !image._wizardClockFailed) {
       ctx.save();
       ctx.beginPath();
@@ -1183,6 +1376,7 @@ class WizardClockCard extends HTMLElement {
     ctx.restore();
 
     if (!useOverlay && ringWidth > 0) {
+      this.clearCanvasShadow(ctx);
       ctx.beginPath();
       ctx.lineWidth = ringWidth;
       ctx.strokeStyle = ringColour;
@@ -2341,20 +2535,64 @@ class WizardClockCard extends HTMLElement {
       }
   }
 
+  configureClockFace() {
+    const face = this.config.clock_face || {};
+    this.faceBackgroundColour = face.background_colour || face.background_color;
+    this.faceBorderColour = face.border_colour || face.border_color;
+    this.faceBorderWidth = Math.max(0, this.getConfigNumber(face, ["border_width"], 0));
+    this.faceBorderWidthConfigured = face.border_width !== undefined;
+    this.faceImageScale = Math.max(0.01, this.getConfigNumber(face, ["image_scale"], 1));
+    this.faceImageOffsetX = this.getConfigNumber(face, ["image_offset_x"], 0);
+    this.faceImageOffsetY = this.getConfigNumber(face, ["image_offset_y"], 0);
+
+    const imagePath = face.image ? String(face.image).trim() : "";
+    const imageUrl = imagePath && !/^(\/|https?:|data:|blob:)/i.test(imagePath) ?
+      "/local/community/weasley-card/" + imagePath : imagePath;
+    if (this.faceImageUrl === imageUrl) {
+      return;
+    }
+    this.faceImageUrl = imageUrl;
+    this.faceImage = undefined;
+    if (imageUrl) {
+      const image = new Image();
+      this.faceImage = image;
+      image.onload = () => {
+        if (this.faceImage === image) {
+          this.requestClockRedraw();
+        }
+      };
+      image.src = imageUrl;
+    }
+  }
+
   drawFace(ctx, radius) {
-    ctx.shadowColor = null;
+    ctx.shadowColor = "#0000";
     ctx.shadowBlur = 0;
     ctx.shadowOffsetX = 0;
     ctx.shadowOffsetY = 0;
+    ctx.save();
 
     ctx.beginPath();
     ctx.arc(0, 0, radius, 0, 2*Math.PI);
-      ctx.fillStyle = this.getThemeColour('secondaryBackground');
+    ctx.fillStyle = this.faceBackgroundColour || this.getThemeColour('secondaryBackground');
     ctx.fill();
 
-    ctx.strokeStyle = this.getThemeColour('primaryBackground');
-    ctx.lineWidth = radius*0.02;
-    ctx.stroke();
+    const image = this.faceImage;
+    if (image && image.complete && image.naturalWidth > 0) {
+      ctx.save();
+      ctx.clip();
+      const size = radius * 2 * this.faceImageScale;
+      ctx.drawImage(image, -size / 2 + this.faceImageOffsetX, -size / 2 + this.faceImageOffsetY, size, size);
+      ctx.restore();
+    }
+
+    const borderWidth = this.faceBorderWidthConfigured ? this.faceBorderWidth : radius * 0.02;
+    if (borderWidth > 0) {
+      ctx.strokeStyle = this.faceBorderColour || this.getThemeColour('primaryBackground');
+      ctx.lineWidth = borderWidth;
+      ctx.stroke();
+    }
+    ctx.restore();
   }
 
   drawHinge(ctx, radius, colour) {
@@ -2376,7 +2614,7 @@ class WizardClockCard extends HTMLElement {
       var num;
       ctx.textBaseline="middle";
       ctx.textAlign="center";
-      ctx.fillStyle = this.getThemeColour('primaryText');
+      ctx.fillStyle = this.locationTextColour || this.getThemeColour('primaryText');
       for(num= 0; num < locations.length; num++){
           const locationEntry = typeof locations[num] === "string" ? { label: locations[num] } : locations[num];
           const locationLabel = String(locationEntry.label);
@@ -2616,7 +2854,7 @@ class WizardClockCard extends HTMLElement {
           width: radius*this.handWidthScale,
           wizard: wizards[num].name,
           colour: wizards[num].colour,
-          textcolour: wizards[num].textcolour,
+          textcolour: this.getWizardHandTextColour(wizards[num]),
           moreInfoEntity: this.getWizardMoreInfoEntity(wizards[num]),
           testControl: Boolean(wizards[num]._test_control),
           wizardKey: this.getWizardKey(wizards[num]),
@@ -2722,10 +2960,22 @@ class WizardClockCard extends HTMLElement {
         ctx.fillStyle = this.getThemeColour('primary');
     }
     const shadowEnabled = options.shadow !== false;
-    ctx.shadowColor = options.glowAlpha ? this.colorWithAlpha(colour || ctx.fillStyle, 0.25 + options.glowAlpha * 0.55) : "#0008";
-    ctx.shadowBlur = options.glowAlpha ? this.recentMovementGlowBlur : (shadowEnabled ? 10 : 0);
-    ctx.shadowOffsetX = 5;
-    ctx.shadowOffsetY = 5;
+    if (options.glowAlpha) {
+      ctx.shadowColor = this.colorWithAlpha(colour || ctx.fillStyle, 0.25 + options.glowAlpha * 0.55);
+      ctx.shadowBlur = this.recentMovementGlowBlur;
+      ctx.shadowOffsetX = 5;
+      ctx.shadowOffsetY = 5;
+    } else if (shadowEnabled) {
+      ctx.shadowColor = "#0008";
+      ctx.shadowBlur = 10;
+      ctx.shadowOffsetX = 5;
+      ctx.shadowOffsetY = 5;
+    } else {
+      ctx.shadowColor = "#0000";
+      ctx.shadowBlur = 0;
+      ctx.shadowOffsetX = 0;
+      ctx.shadowOffsetY = 0;
+    }
     ctx.moveTo(0,0);
     ctx.rotate(pos);
     ctx.quadraticCurveTo(width, -length*0.5, width, -length*0.75);
